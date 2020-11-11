@@ -36,7 +36,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr_iql_r', default=1e-5, type=float)
     parser.add_argument('--lr_q_sh', default=1e-5, type=float)
     parser.add_argument('--lr_pre', default=1e-5, type=float)
-    parser.add_argument('--lr', default=1e-5, type=float)
+    parser.add_argument('--lr', default=5e-4, type=float)
     parser.add_argument('--fc1_units', default=256, type=int)
     parser.add_argument('--fc2_units', default=256, type=int)
     parser.add_argument('--mode', default="iql", type=str)

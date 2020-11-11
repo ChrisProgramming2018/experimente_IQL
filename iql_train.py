@@ -44,7 +44,7 @@ def train(env, config):
 
     
     if config["mode"] == "iql":
-        agent.load("pytorch_models-{trained_predicter}-100/")
+        # agent.load("pytorch_models-{trained_predicter}-100/")
         agent.test_predicter(memory)
         for t in range(config["predicter_time_steps"]):
             text = "Train Predicter {}  \ {}  time {}  \r".format(t, config["predicter_time_steps"], time_format(time.time() - t0))

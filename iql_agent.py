@@ -16,7 +16,9 @@ torch.set_printoptions(threshold=5000)
 import logging
 from datetime import datetime
 
-logging.basicConfig(filename="test.log", level=logging.DEBUG)
+now = datetime.now()    
+dt_string = now.strftime("%d_%m_%Y_%H:%M:%S")
+logging.basicConfig(filename="search_results-64/{}.log".format(dt_string), level=logging.DEBUG)
 
 
 
@@ -38,13 +40,14 @@ class Agent():
         self.batch_size = config["batch_size"]
         self.lr = config["lr"]
         self.tau = config["tau"]
+        print("self tau", self.tau)
         self.gamma = 0.99
         self.fc1 = config["fc1_units"]
         self.fc2 = config["fc2_units"]
         self.qnetwork_local = QNetwork(state_size, action_size, self.fc1, self.fc2, self.seed).to(self.device)
         self.qnetwork_target = QNetwork(state_size, action_size, self.fc1, self.fc2, self.seed).to(self.device)
         self.optimizer = optim.Adam(self.qnetwork_local.parameters(), lr=self.lr)
-        self.soft_update(self.qnetwork_local, self.qnetwork_target, self.lr)
+        self.soft_update(self.qnetwork_local, self.qnetwork_target, 1)
         
         self.q_shift_local = QNetwork(state_size, action_size, self.fc1, self.fc2, self.seed).to(self.device)
         self.q_shift_target = QNetwork(state_size, action_size, self.fc1, self.fc2, self.seed).to(self.device)
@@ -56,7 +59,7 @@ class Agent():
         self.optimizer_r = optim.Adam(self.R_local.parameters(), lr=self.lr)
         self.soft_update(self.R_local, self.R_target, 1) 
 
-        self.expert_q = QNetwork(state_size, action_size, self.seed).to(self.device)
+        self.expert_q = QNetwork(state_size, action_size, seed=self.seed).to(self.device)
         self.expert_q.load_state_dict(torch.load('checkpoint.pth'))
         self.memory = Memory(action_size, config["buffer_size"], self.batch_size, self.seed, self.device)
         self.t_step = 0
@@ -64,7 +67,7 @@ class Agent():
         self.predicter = Classifier(state_size, action_size, self.seed).to(self.device)
         self.optimizer_pre = optim.Adam(self.predicter.parameters(), lr=self.lr_pre)
         pathname = "lr {}  lr_pre {} batch_size {} fc1 {}  fc2 {} seed {}".format(self.lr, self.lr_pre, self.batch_size,  self.fc1, self.fc2, self.seed)
-        pathname += "sample_size-{}".format(config["idx"])
+        pathname += "tau-{}".format(config["tau"])
         pathname += "all_ action"
         now = datetime.now()    
         dt_string = now.strftime("%d_%m_%Y_%H:%M:%S")
@@ -91,6 +94,9 @@ class Agent():
                 action =  torch.ones([self.batch_size, 1], device= self.device) * a
                 self.compute_r_function(states, action)
         self.compute_q_function(states, next_states, actions, dones)
+        self.soft_update(self.q_shift_local, self.q_shift_target, self.tau)
+        self.soft_update(self.R_local, self.R_target, self.tau)
+        self.soft_update(self.qnetwork_local, self.qnetwork_target, self.tau)
         return
     
     def learn_predicter(self, memory):
@@ -197,8 +203,6 @@ class Agent():
         self.writer.add_scalar('Shift_loss', loss, self.steps)
         self.optimizer_shift.step()
 
-        # ------------------- update target network ------------------- #
-        self.soft_update(self.q_shift_local, self.q_shift_target)
 
     def compute_r_function(self, states, actions, debug=False, log=False):
         """
@@ -276,7 +280,6 @@ class Agent():
             print("after update r target ", self.R_target(states).gather(1, actions).item())
         # ------------------- update target network ------------------- #
         #self.soft_update(self.R_local, self.R_target, 5e-3)
-        self.soft_update(self.R_local, self.R_target, self.tau)
         if debug:
             print("after soft upda r target ", self.R_target(states).gather(1, actions).item())
     
@@ -330,7 +333,6 @@ class Agent():
 
 
         # ------------------- update target network ------------------- #
-        self.soft_update(self.qnetwork_local, self.qnetwork_target)
 
 
 
@@ -381,7 +383,7 @@ class Agent():
             action_e = torch.argmax(q_expert).item()
             if action == action_e:
                 same_action += 1
-            next_state, reward, done, _ = env.step(action)
+            next_state, reward, done, _ = env.step(action_e)
             state = next_state
             score += reward
             if done:
@@ -562,7 +564,7 @@ class Agent():
         print("Same actions {}  of {}".format(same_action, test_elements))
 
 
-    def soft_update(self, local_model, target_model, tau=None):
+    def soft_update(self, local_model, target_model, tau=4):
         """Soft update model parameters.
         θ_target = τ*θ_local + (1 - τ)*θ_target
         Params
@@ -571,8 +573,7 @@ class Agent():
             target_model (PyTorch model): weights will be copied to
             tau (float): interpolation parameter
         """
-        if tau is None:
-            tau = self.tau
+        # print("use tau", tau)
         for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
             target_param.data.copy_(tau * local_param.data + (1.0 - tau) * target_param.data)
     
